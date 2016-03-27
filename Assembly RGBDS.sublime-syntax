@@ -1,0 +1,143 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: Assembly (RGBDS)
+file_extensions: [gb.s, asm, inc, z80]
+scope: source.rgbds
+
+variables:
+  operators: (z|nz|nc)
+  registers: (a|b|c|d|e|h|l|af|bc|de|hl|sp)
+  instructions: (ld|ldi|ldd|ldh|push|pop|add|adc|sub|sbc|and|or|xor|cp|inc|dec|daa|cpl|rlca|rla|rrca|rra|rlc|rl|rrc|rr|sla|swap|sra|srl|bit|res|set|ccf|scf|nop|halt|stop|di|ei|jp|jr|call|ret|reti|rst)
+  directives: (IF|DEF|ELSE|ENDC|ENDR|ENDM|REPT|DB|DW|DS|INCBIN|SECTION|PRINTF|PRINTT|PRINTV||WARN|FAIL|PUSHO|PUSHS|OPT|POPO|PURGE|STRLWR|STRCMP|STRSUB|STRUPR|STRLEN)
+
+contexts:
+  main:
+    - match: \s*;.*$
+      scope: comment.line
+
+    - match: ^\*.*$
+      scope: comment.line
+
+    - match: '\$[0-9a-fA-F]+'
+      scope: constant.numeric.hex
+
+    - match: '%[01]+'
+      scope: constant.numeric.binary
+
+    - match: '\b[0-9]+\b'
+      scope: constant.numeric
+
+    - match: \b(?i:{{registers}})\b
+      scope: support.class.rgbds
+
+    - match: \b(?i:{{operators}})\b
+      scope: support.class.rgbds
+
+    - match: \b(?i:{{instructions}})\b
+      scope: keyword.other.mnemonic
+
+    - match: \b(?i:{{directives}})\b
+      scope: keyword.control.directive
+
+    - match: \(|\)
+      scope: meta.brace.round.rgbds
+    - match: '\[|\]'
+      scope: meta.brace.square.rgbds
+
+    - match: "'"
+      captures:
+        0: punctuation.definition.string.begin.rgbds
+      push:
+        - meta_scope: string.quoted.single.rgbds
+        - match: "'"
+          captures:
+            0: punctuation.definition.string.end.rgbds
+          pop: true
+        - match: '\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.)'
+          scope: constant.character.escape.rgbds
+    - match: '"'
+      captures:
+        0: punctuation.definition.string.begin.rgbds
+      push:
+        - meta_scope: string.quoted.double.rgbds
+        - match: '"'
+          captures:
+            0: punctuation.definition.string.end.rgbds
+          pop: true
+        - match: '\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)'
+          scope: constant.character.escape.rgbds
+
+    # match import statements
+    - match: '^\s*\b(?i:import)\b\s+'
+      captures:
+        0: keyword.control.import
+
+    - match: '^\s*((?i:export))\s+([a-zA-Z_][a-zA-Z_0-9\\@]*)'
+      captures:
+        1: keyword.control.directive
+        2: variable.other.constant rgbds.label.exported
+
+    # match include lines and apply specific scope to line and quoted string
+    - match: '^\s*\b(?i:include)\b'
+      captures: 
+        0: keyword.control.import
+      push:
+        - meta_scope: meta.include
+        - match: "(\'|\")"
+          push:
+          - meta_content_scope: string.quoted.include
+          - match: "(\'|\")"
+            pop: true
+        - include: main # after the quotes we want detect comments, etc
+        - match: '$'
+          pop: true
+
+    # match aliases
+    - match: '^([a-zA-Z_][a-zA-Z_0-9]*)\s+(?i:(EQUS|EQU|SET|\=))'
+      captures: 
+        # 1: entity.name.function.rgbds rgbds.alias
+        1: variable.other.constant rgbds.alias
+        2: keyword.control.directive        
+
+    # match macro labels, needs to be above global labels to add the extra scope
+    - match: '^([a-zA-Z_][a-zA-Z_0-9\\@]*)(\:*)\s+\b((?i:MACRO))\b'
+      captures: 
+        1: entity.name.function.rgbds rgbds.label.macro
+        2: punctuation.definition.colon
+        3: keyword.control.directive
+
+    # match global labels
+    - match: '^([a-zA-Z_][a-zA-Z_0-9\\@]*)'
+      captures:
+        1: entity.name.function.rgbds rgbds.label.global
+      push:
+        - include: main
+        - match: '(\:*)\s+'
+          captures:
+            1: punctuation.definition.colon
+          pop: true
+
+    - match: '^(\.[a-zA-Z_][a-zA-Z_0-9\\@]*)(\:*)'
+      captures:
+        1: entity.name.function.rgbds rgbds.label.local
+        2: constant.character.colon
+      push:
+        - include: main
+        - match: '$'
+          pop: true
+        - match: '[0-9]'
+          scope: invalid.illegal.rgbds
+
+    # match local labels
+    # - match: '^\.'
+    #   push:
+    #     - include: main
+    #     - match: '$'
+    #       pop: true
+    #     - match: '([a-zA-Z_][a-zA-Z_0-9\\@]*)(\:*)\s+'
+    #       captures:
+    #         1: entity.name.function.rgbds rgbds.label.local
+    #         2: constant.character.colon
+    #     - match: '[0-9]'
+    #       scope: invalid.illegal.rgbds
