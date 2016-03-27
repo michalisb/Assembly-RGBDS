@@ -1,6 +1,6 @@
 [
 	{
-        "caption":"(RGBDS) Goto Definition",
-        "command": "get_definition",
-    }
+		"caption":"(RGBDS) Goto Definition",
+		"command": "get_definition",
+	}
 ]
