@@ -5,7 +5,7 @@ Manages the file contexts
 from .misc import isAsm
 from time import time
 import sublime, sublime_plugin
-import os
+import os, re
 
 
 class Context:
@@ -16,6 +16,7 @@ class Context:
 		self.exported_labels = []
 		self.labels = []
 		self.macros = []
+		self.symbols = dict()
 		self.view = view
 		self.mtime = 0
 		self.view_id = view.id()
@@ -124,20 +125,30 @@ class Context:
 		
 		# grab the rest of the symbols defined in the view
 		self.exported_labels = [self.view.substr(r) for r in self.view.find_by_selector("rgbds.label.exported")]
-		self.macros = [self.view.substr(r) for r in self.view.find_by_selector("rgbds.label.macro")]
-		self.aliases = [self.view.substr(r) for r in self.view.find_by_selector("rgbds.alias")]
+
+		self.macros = []
+		for r in self.view.find_by_selector("rgbds.label.macro"):
+			symbol = self.view.substr(r)
+			self.symbols[symbol] = r
+			self.macros.append(symbol)
+
+		self.aliases = []
+		for r in self.view.find_by_selector("rgbds.alias"):
+			symbol = self.view.substr(r)
+			self.symbols[symbol] = r
+			self.aliases.append(symbol)
 		
 		self.labels = []
 		for r in self.view.find_by_selector("rgbds.label.global"):
-			label = self.view.substr(r)
+			symbol = self.view.substr(r)
+			self.symbols[symbol] = r
 			end_r = sublime.Region(r.end(), r.end() + 2)
 
 			# check if the label is an exported one
 			if self.view.substr(end_r) == "::":
-				self.exported_labels.append(label)
+				self.exported_labels.append(symbol)
 			else:
-				self.labels.append(label)		
-		print("%s - %s" % (self.getFilePath(), self.labels))
+				self.labels.append(symbol)
 
 
 
@@ -146,10 +157,8 @@ class ContextManager(sublime_plugin.EventListener):
 
 	def __init__(self):
 		ContextManager._instance = self
-		self.scanning = dict()
 		self.contexts = dict()
 		self.scanRequests = set()
-		print(self)
 			
 
 	@staticmethod
@@ -157,7 +166,7 @@ class ContextManager(sublime_plugin.EventListener):
 		return ContextManager._instance
 
 
-	def getContext(self, view):
+	def getContextFromView(self, view):
 		if view.file_name() is None:
 			for ctx in self.contexts.values():
 				if view.id() == ctx.getViewId():
@@ -169,7 +178,7 @@ class ContextManager(sublime_plugin.EventListener):
 
 
 	def addView(self, view):
-		ctx = self.getContext(view)
+		ctx = self.getContextFromView(view)
 		if ctx is None and isAsm(view):
 			ctx = Context(view)
 
@@ -189,7 +198,6 @@ class ContextManager(sublime_plugin.EventListener):
 
 
 	def addScanRequest(self, path):
-		print("Adding path to requests: %s" % path)
 		self.scanRequests.add(path)
 		view = sublime.active_window().open_file(path)
 		ctx = self.addView(view)
@@ -211,13 +219,12 @@ class ContextManager(sublime_plugin.EventListener):
 		if not isAsm(view):
 			return
 
-		ctx = self.getContext(view)
+		ctx = self.getContextFromView(view)
 		if ctx is None:
 			ctx = self.addView(view)
 
 			def activateAsync():
-				print("running activateAsync for %s " % view.file_name())
-				view.run_command('example')
+				view.run_command('syntax_highlight')
 
 			if view.file_name() not in self.scanRequests:
 				sublime.set_timeout(activateAsync, 100)
@@ -227,29 +234,25 @@ class ContextManager(sublime_plugin.EventListener):
 		if not isAsm(view):
 			return
 
-		ctx = self.getContext(view)
+		ctx = self.getContextFromView(view)
 		if ctx is None:
 			ctx = self.addView(view)
-			if ctx is None:
-				print('found view %s-%s but failed to create context' % (view.file_name(), view.id()))
 
-		view.run_command('example')
+		view.run_command('syntax_highlight')
 
 
 	def on_modified_async(self, view):
 		if not isAsm(view):
 			return
 
-		print('on_modified_async %s' % view.file_name())
-		view.run_command('example')
+		view.run_command('syntax_highlight')
 
 
 	def on_load_async(self, view):
 		if not isAsm(view):
-			print("view %s not asm" % view.file_name())
 			return
 			
-		ctx = self.getContext(view)
+		ctx = self.getContextFromView(view)
 		if ctx is None:
 			ctx = self.addView(view)
 
@@ -270,12 +273,12 @@ class ContextManager(sublime_plugin.EventListener):
 
 		# if we have a context for that view, mark it as stale
 		# by removing the reference to the view - no further ops possible
-		ctx = self.getContext(view)
+		ctx = self.getContextFromView(view)
 		if ctx:
 			ctx.view = None
 
 
-class ExampleCommand(sublime_plugin.TextCommand):	
+class SyntaxHighlightCommand(sublime_plugin.TextCommand):	
 	
 	def is_enabled(self):
 		return isAsm(self.view)
@@ -284,11 +287,13 @@ class ExampleCommand(sublime_plugin.TextCommand):
 	def getRegionsFromSymbols(self, symbols):
 		regions = []
 		for s in symbols:
-				for r in self.view.find_all(s, sublime.LITERAL):
-					word_scope = self.view.scope_name(r.begin()).strip()
-					if "rgbds.label" not in word_scope and "comment" not in word_scope:
-					#if "source.rgbds" == word_scope:
-						regions.append(r)
+			pattern = '\\b%s\\b' % s
+			if s[0] == '.' or s[-1] == "@":
+				pattern = re.escape(s)	# local labels regex needs a bit of love
+			for r in self.view.find_all(pattern):
+				word_scope = self.view.scope_name(r.begin()).strip()
+				if "rgbds.label" not in word_scope and "comment" not in word_scope:
+					regions.append(r)
 		return regions
 
 
@@ -296,7 +301,7 @@ class ExampleCommand(sublime_plugin.TextCommand):
 		self.view.erase_regions('labels')
 		self.view.erase_regions('aliases')
 		self.view.erase_regions('macros')
-		ctx = ContextManager.instance().getContext(self.view)
+		ctx = ContextManager.instance().getContextFromView(self.view)
 		if ctx:
 			files = set()
 			ctx_sym = ctx.getSymbols(files)

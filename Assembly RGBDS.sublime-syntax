@@ -28,6 +28,7 @@ contexts:
     - match: '\b[0-9]+\b'
       scope: constant.numeric
 
+    # match assembler keywords
     - match: \b(?i:{{registers}})\b
       scope: support.class.rgbds
 
@@ -40,11 +41,13 @@ contexts:
     - match: \b(?i:{{directives}})\b
       scope: keyword.control.directive
 
+    # braces scopes
     - match: \(|\)
       scope: meta.brace.round.rgbds
     - match: '\[|\]'
       scope: meta.brace.square.rgbds
 
+    # specify a string scope
     - match: "'"
       captures:
         0: punctuation.definition.string.begin.rgbds
@@ -68,7 +71,7 @@ contexts:
         - match: '\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)'
           scope: constant.character.escape.rgbds
 
-    # match import statements
+    # match import/export statements
     - match: '^\s*\b(?i:import)\b\s+'
       captures:
         0: keyword.control.import
@@ -118,6 +121,7 @@ contexts:
             1: punctuation.definition.colon
           pop: true
 
+    # match local labels
     - match: '^(\.[a-zA-Z_][a-zA-Z_0-9\\@]*)(\:*)'
       captures:
         1: entity.name.function.rgbds rgbds.label.local
@@ -128,16 +132,3 @@ contexts:
           pop: true
         - match: '[0-9]'
           scope: invalid.illegal.rgbds
-
-    # match local labels
-    # - match: '^\.'
-    #   push:
-    #     - include: main
-    #     - match: '$'
-    #       pop: true
-    #     - match: '([a-zA-Z_][a-zA-Z_0-9\\@]*)(\:*)\s+'
-    #       captures:
-    #         1: entity.name.function.rgbds rgbds.label.local
-    #         2: constant.character.colon
-    #     - match: '[0-9]'
-    #       scope: invalid.illegal.rgbds

@@ -1,73 +1,84 @@
 '''
 Manages the color scheme in sublime, by making a copy of the active one with 
 the extra scopes needed by our syntax manager
+This is a workaround, to define colours for the symbols we specify through view.add_regions
+
+https://github.com/SublimeTextIssues/Core/issues/817
 '''
 
 from .misc import getScopeList, getForegroundColorForScope
+from time import time
 import sublime, sublime_plugin
 import re, plistlib
 
 
-
 class ColorSchemeManager(sublime_plugin.ApplicationCommand):
-	modification_running = False
+	modification_last_run = 0
 
 	@staticmethod
 	def adjustScheme():		
 		scheme = sublime.load_settings("Preferences.sublime-settings").get('color_scheme')
-		if ColorSchemeManager.modification_running:
-			return
+		time_now = time()
+
+		# if already using an RGBDS modified theme, do nothing
 		if "Packages/RGBDSThemes" in scheme:
 			return
-		ColorSchemeManager.modification_running = True
+
+		# other plugins use the same workaround for their custom scopes
+		# pay nice by unsubscribing from the 'color_scheme' event and waiting a couple of seconds
+		if ColorSchemeManager.modification_last_run + 2 > time_now:
+			return
+
+		sublime.load_settings("Preferences.sublime-settings").clear_on_change('color_scheme')
+		ColorSchemeManager.modification_last_run = time_now
 		try:
 			cs = plistlib.readPlistFromBytes(sublime.load_binary_resource(scheme))
 
-			tokenclr = "#000000"
+			# this workaround for custom scopes-regions, works by using the a different background colour
+			# than the one in the theme, but we don't actually want it to differ - just different enough
+			# so that the workaround works
+			backgroundColour = "#000000"
 			for rule in cs['settings']:
-				# print(rule)
 				if "scope" not in rule and "name" not in rule:
-					bgc = rule['settings']['background']
-					r = int(bgc[1:3], 16)
-					g = int(bgc[3:5], 16)
-					b = int(bgc[5:7], 16)
-					if b > 0:
-						b = b-1
-					elif g > 0:
-						g = g-1
-					elif r > 0:
-						r = r-1
+					colour = re.sub('^#(.)(.)(.)$', r'#\1\1\2\2\3\3', rule['settings']['background'])
+					colour_value = int(colour[1:], base=16)
+					if colour_value < 0xffffff:
+						colour_value += 1
 					else:
-						rule['settings']['background'] = "#000001"
-					tokenclr = "#%02x%02x%02x" % (r, g, b)
+						colour_value -= 1
+					backgroundColour = "#{:06x}".format(colour_value)
 					break
 
-			labelfgc = getForegroundColorForScope(cs['settings'], 'entity.name.function')
-			aliasfgc = getForegroundColorForScope(cs['settings'], 'variable.other.constant')
-			macrofgc = getForegroundColorForScope(cs['settings'], 'keyword.control.directive')
 
-			print('tokenclr = {0}, foregroundC = {1}'.format(tokenclr, labelfgc))
 			cs['name'] = cs['name'] + " (RGBDS)"
 
+			# add a scope for labels, it should use the functions color
+			labelfgc = getForegroundColorForScope(cs['settings'], 'entity.name.function')
 			cs['settings'].append(dict(
 				scope="rgbdsLabel",
 				settings=dict(
 					foreground=labelfgc,
-					background=tokenclr)
+					background=backgroundColour)
 				)
 			)
+
+			# add a scope for aliases/equates, it should use the variable/constant color
+			aliasfgc = getForegroundColorForScope(cs['settings'], 'variable.other.constant')
 			cs['settings'].append(dict(
 				scope="rgbdsAlias",
 				settings=dict(
 					foreground=aliasfgc,
-					background=tokenclr)
+					background=backgroundColour)
 				)
 			)
+
+			# and lastly one for macros
+			macrofgc = getForegroundColorForScope(cs['settings'], 'keyword.control.directive')
 			cs['settings'].append(dict(
 				scope="rgbdsMacro",
 				settings=dict(
 					foreground=macrofgc,
-					background=tokenclr)
+					background=backgroundColour)
 				)
 			)
 
@@ -79,8 +90,6 @@ class ColorSchemeManager(sublime_plugin.ApplicationCommand):
 			sublime.save_settings("Preferences.sublime-settings")
 
 		except Exception as e:
-			#sublime.error_message("Colorcoder was not able to parse the colorscheme\nCheck the console for the actual error message.")
-			#sublime.active_window().run_command("show_panel", {"panel": "console", "toggle": True})
 			print(e)
 		finally:
-			ColorSchemeManager.modification_running = False
+			sublime.load_settings("Preferences.sublime-settings").add_on_change('color_scheme', ColorSchemeManager.adjustScheme)

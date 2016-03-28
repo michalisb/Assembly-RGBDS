@@ -1,7 +1,8 @@
 from .context import ContextManager
-from .context import ExampleCommand
 from .scheme import ColorSchemeManager
-from .misc import isAsm
+from .context import SyntaxHighlightCommand
+from .open_include import OpenIncludeFileCommand
+from .show_definition import ShowDefinitionCommand
 
 
-__all__ = ["ContextManager", "ExampleCommand", "ColorSchemeManager", "isAsm"]
+__all__ = ["ContextManager", "SyntaxHighlightCommand", "ColorSchemeManager", "OpenIncludeFileCommand", "ShowDefinitionCommand"]

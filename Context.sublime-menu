@@ -1,6 +1,10 @@
 [
 	{
-		"caption":"(RGBDS) Goto Definition",
-		"command": "get_definition",
-	}
+		"caption":"RGBDS: Show Definition",
+		"command": "show_definition",
+	},
+	{
+		"caption":"RGBDS: Open File",
+		"command": "open_include_file",
+	},
 ]
