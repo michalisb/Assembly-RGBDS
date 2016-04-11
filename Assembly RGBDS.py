@@ -12,9 +12,9 @@ if sys.version_info < (3, 3):
 def plugin_loaded():
 	sublime.load_settings("Preferences.sublime-settings").add_on_change('color_scheme', ColorSchemeManager.adjustScheme)
 
-	pp = sublime.packages_path()
-	if not os.path.exists(pp+"/RGBDSThemes"):
-		os.makedirs(pp+"/RGBDSThemes")
+	packages_path = sublime.packages_path()
+	if not os.path.exists(packages_path+"/RGBDSThemes"):
+		os.makedirs(packages_path+"/RGBDSThemes")
 
 	ColorSchemeManager.adjustScheme()
 
