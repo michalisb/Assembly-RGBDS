@@ -92,9 +92,7 @@ class Context:
 				full_path = os.path.realpath(os.path.join(p, file_name))
 
 				# check that the file actualy exists
-				print("is path %s file %s" % (full_path, os.path.isfile(full_path)))
 				if os.path.isfile(full_path):
-					print(full_path)
 
 					if full_path in self.includes:
 						self.includes[full_path].reCheckLatest()
