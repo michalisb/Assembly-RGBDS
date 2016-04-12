@@ -63,6 +63,7 @@ class Context:
 			project_path = self.view.window().project_file_name()
 			if project_path:
 				project_path = os.path.dirname(project_path)
+				paths.append(os.path.realpath(project_path))
 				project_data = self.view.window().project_data()
 
 				# check that project data has settings and include_paths is contained
@@ -91,7 +92,9 @@ class Context:
 				full_path = os.path.realpath(os.path.join(p, file_name))
 
 				# check that the file actualy exists
+				print("is path %s file %s" % (full_path, os.path.isfile(full_path)))
 				if os.path.isfile(full_path):
+					print(full_path)
 
 					if full_path in self.includes:
 						self.includes[full_path].reCheckLatest()
