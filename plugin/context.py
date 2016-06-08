@@ -6,11 +6,11 @@ from .misc import isAsm
 from time import time
 import sublime, sublime_plugin
 import os
-
+		
 
 class Context:
 
-	def __init__(self, view):
+	def __init__(self, view, path=None):
 		self.includes = dict()
 		self.aliases = []
 		self.exported_labels = []
@@ -19,8 +19,12 @@ class Context:
 		self.symbols = dict()
 		self.view = view
 		self.mtime = 0
-		self.view_id = view.id()
-		self.file_path = view.file_name()
+		if not view:
+			self.view_id = 0
+			self.file_path = path
+		else:
+			self.view_id = view.id()
+			self.file_path = view.file_name()
 
 
 	def getViewId(self):
@@ -101,7 +105,7 @@ class Context:
 					# is the file already opened?
 					newView = sublime.active_window().find_open_file(full_path)
 					if newView is None:
-						ctx = ContextManager.instance().addScanRequest(full_path)
+						ctx = ContextManager.instance().addScanRequest(self.view, full_path)
 						self.includes[full_path] = ctx
 					else:
 						ctx = ContextManager.instance().addView(newView)
@@ -113,7 +117,7 @@ class Context:
 		if os.path.getmtime(self.getFilePath()) > self.mtime:
 			if self.view is None:
 				# context is stale, re-open the file
-				ctx = ContextManager.instance().addScanRequest(full_path)
+				ctx = ContextManager.instance().addScanRequest(self.view, full_path)
 			else:
 				self.scanSymbols()
 				
@@ -165,12 +169,15 @@ class ContextManager(sublime_plugin.EventListener):
 	def __init__(self):
 		ContextManager._instance = self
 		self.contexts = dict()
-		self.scanRequests = set()
-			
+
 
 	@staticmethod
 	def instance():
 		return ContextManager._instance
+
+
+	def getContextForPath(self, path):
+		return self.contexts[path]
 
 
 	def getContextFromView(self, view):
@@ -205,10 +212,12 @@ class ContextManager(sublime_plugin.EventListener):
 		return ctx
 
 
-	def addScanRequest(self, path):
-		self.scanRequests.add(path)
-		view = sublime.active_window().open_file(path)
-		ctx = self.addView(view)
+	def addScanRequest(self, src_view, path):
+		ctx = Context(None, path)
+		self.contexts[path] = ctx
+
+		sublime.active_window().active_view().run_command("scan_file_symbols", {"args": path})
+
 		return ctx
 
 
@@ -234,7 +243,7 @@ class ContextManager(sublime_plugin.EventListener):
 				if view.is_valid():
 					view.run_command('syntax_highlight')
 
-			if view.file_name() not in self.scanRequests:
+			if view.file_name():
 				sublime.set_timeout(activateAsync, 100)
 
 
@@ -265,16 +274,6 @@ class ContextManager(sublime_plugin.EventListener):
 		ctx = self.getContextFromView(view)
 		if ctx is None:
 			ctx = self.addView(view)
-
-		if view.file_name() in self.scanRequests:
-			self.scanRequests.remove(view.file_name())
-
-			ctx.scanSymbols()
-
-			# we don't want that view attached anymore, close it
-			view.set_scratch(True)
-			group_index, view_index = view.window().get_view_index(view)
-			view.window().run_command("close_by_index", { "group": group_index, "index": view_index})
 
 
 	def on_pre_close(self, view):
